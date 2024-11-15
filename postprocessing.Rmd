@@ -1,0 +1,301 @@
+---
+title: "Post-processing the snRNA-seq data"
+output: html_document
+date: "2024-10-31"
+---
+
+# Loading libraries
+```{r}
+library(Seurat)
+library(ggplot2)
+```
+
+# Processing in Seurat
+### Sample 1
+##### Processing
+Read the count matrix
+```{r}
+sample1_cm <- Read10X("/prj/julia_ritterhoff/data/processed/1-1E12/outs/filtered_feature_bc_matrix/")
+
+sample1 <- CreateSeuratObject(counts = sample1_cm, min.cells = 100, min.features = 1000)
+sample1 <- NormalizeData(sample1)
+sample1 <- FindVariableFeatures(sample1, selection.method = "vst", nfeatures = 2000)
+all.genes <- rownames(sample1)
+sample1 <- ScaleData(sample1, features = all.genes)
+sample1 <- RunPCA(sample1, features = VariableFeatures(object = sample1))
+sample1 <- RunUMAP(sample1, dims = 1:30)
+sample1 <- FindNeighbors(sample1, dims = 1:30)
+sample1 <- FindClusters(sample1, resolution = 0.5)
+```
+
+##### Marker gene analysis - https://www.nature.com/articles/s41467-022-35691-7/figures/1
+
+Find all markers
+```{r}
+markers_sample1 <- FindAllMarkers(sample1)
+write.csv(markers_sample1,  "markers_sample1.csv",  quote = F)
+```
+
+All
+```{r}
+FeaturePlot(sample1, c("Ttn", "Sln", "Myl2", "Pecam1"), label = T) # Myl2 not found
+FeaturePlot(sample1, c("Npr3", "Fsbp4", "Wt1", "Postn"), label = T) # Fsbp4 not found
+FeaturePlot(sample1,c("Pdgfrb", "C1qa"), label = T)
+```
+
+Cardiomyocytes - Ttn 
+```{r}
+FeaturePlot(sample1, c("Ttn"), label = T) | VlnPlot(sample1, "Ttn", pt.size = 0)
+```
+
+Vascular cells - Pecam1
+```{r}
+FeaturePlot(sample1, c("Pecam1"), label = T) | VlnPlot(sample1, "Pecam1", pt.size = 0)
+```
+
+Endocardial ECs (Endo_ECs) - Npr3
+```{r}
+FeaturePlot(sample1, c("Npr3"), label = T) | VlnPlot(sample1, "Npr3", pt.size = 0)
+```
+
+Coronary vascular EC - Fabp4
+```{r}
+FeaturePlot(sample1, c("Fabp4"), label = T) | VlnPlot(sample1, "Fabp4", pt.size = 0)
+```
+
+Epicardial cell (Epi) - Wt1, TTbx18, Aldh1a2 - Not found
+```{r}
+FeaturePlot(sample1, c("Wt1", "Tbx18", "Aldh1a2"), label = T)
+```
+
+Fibroblast-like cells (Fb_like) - Postn
+```{r}
+FeaturePlot(sample1, c("Ddr2",  "Col3a1"), label = T)
+```
+
+Pericyte - Pdgfrb
+```{r}
+FeaturePlot(sample1, c("Pdgfrb"), label = T) | VlnPlot(sample1, "Pdgfrb", pt.size = 0)
+```
+
+SMC - Myh11 
+```{r}
+FeaturePlot(sample1, c("Myh11"), label = T) | VlnPlot(sample1, "Myh11", pt.size = 0)
+```
+
+Immune cells (Immune) - C1qa 
+```{r}
+FeaturePlot(sample1, c("C1qa"), label = T)
+```
+
+Blood cells (RBC) - Hb1-a1 (not found)
+```{r}
+FeaturePlot(sample1, c("Hb1-a1"), label = T)
+```
+
+Immune cells (Macrophages, B-cells, T-cells, dendritics, NK-cells, neutrophils)
+Macrophages (Adgre1)
+```{r}
+FeaturePlot(sample1, c("Adgre1"), label = T)
+```
+
+B-cells (CD19)
+```{r}
+FeaturePlot(sample1, c("Cd19"), label = T)
+```
+
+T-cells (Bcl11b)
+```{r}
+FeaturePlot(sample1, c("Bcl11b"), label = T)
+```
+
+dendritic cells (H2-Oa) (not found)
+```{r}
+FeaturePlot(sample1, c("H2-Oa"), label = T)
+```
+
+natural killer cells (Unc13d) (not found)
+```{r}
+FeaturePlot(sample1, c("Unc13d"), label = T)
+```
+
+neutrophils (S100a9) (not found)
+```{r}
+FeaturePlot(sample1, c("S100a9"), label = T)
+```
+
+Proliferating cells
+```{r}
+FeaturePlot(sample1, c("Mki67"), label = T)
+```
+
+Rename cluster names and re-plot the dimplot
+```{r}
+current.cluster.ids.1 <- c(0:18)
+new.cluster.ids.1 <- c("Vascular", "Fibroblasts", "CMs", "Vascular", "Macrophages", "Vascular", "Pericytes",
+                       "CMs", "Fibroblasts", "Endocardial", "CMs", "Macrophages", "Pericytes", "ND1",
+                       "SMCs", "Proliferating", "B-cells", "ND2", "CMs")
+Idents(sample1) <- plyr::mapvalues(x = Idents(sample1), from = current.cluster.ids.1, to = new.cluster.ids.1)
+```
+
+Expression of AAV
+```{r}
+FeaturePlot(sample1,  "AAV", label = T)
+VlnPlot(sample1,  "AAV", pt.size = 0)
+```
+
+% of cells expressing this virus transgene
+```{r}
+sum(sample1@assays$RNA$data["AAV",] > 0) / length(Cells(sample1)) * 100
+```
+
+How many cardiomyocytes express this virus transgene
+```{r}
+cmyo_sample1 <- subset(x = sample1, idents = "CMs")
+sum(cmyo_sample1@assays$RNA$data["AAV",] > 0) / length(Cells(cmyo_sample1)) * 100
+```
+
+### Sample 2
+##### Processing
+Read the count matrix
+```{r}
+sample2_cm <- Read10X("/prj/julia_ritterhoff/data/processed/2-1E12/outs/filtered_feature_bc_matrix/")
+
+sample2 <- CreateSeuratObject(counts = sample2_cm, min.cells = 100, min.features = 1000)
+sample2 <- NormalizeData(sample2)
+sample2 <- FindVariableFeatures(sample2, selection.method = "vst", nfeatures = 2000)
+all.genes <- rownames(sample2)
+sample2 <- ScaleData(sample2, features = all.genes)
+sample2 <- RunPCA(sample2, features = VariableFeatures(object = sample2))
+sample2 <- RunUMAP(sample2, dims = 1:30)
+sample2 <- FindNeighbors(sample2, dims = 1:30)
+sample2 <- FindClusters(sample2, resolution = 0.5)
+```
+
+##### Marker gene analysis - https://www.nature.com/articles/s41467-022-35691-7/figures/1
+
+Find all markers
+```{r}
+markers_sample2 <- FindAllMarkers(sample2)
+write.csv(markers_sample2,  "markers_sample2.csv",  quote = F)
+```
+
+
+All
+```{r}
+FeaturePlot(sample2, c("Ttn", "Sln", "Myl2", "Pecam1"), label = T) # Myl2 not found
+FeaturePlot(sample2, c("Npr3", "Fsbp4", "Wt1", "Postn"), label = T) # Fsbp4 not found
+FeaturePlot(sample2,c("Pdgfrb", "C1qa"), label = T)
+```
+
+Cardiomyocytes - Ttn 
+```{r}
+FeaturePlot(sample2, c("Ttn"), label = T)
+```
+
+Vascular cells - Pecam1
+```{r}
+FeaturePlot(sample2, c("Pecam1"), label = T) | VlnPlot(sample2, "Pecam1", pt.size = 0)
+```
+
+Endocardial ECs (Endo_ECs) - Npr3
+```{r}
+FeaturePlot(sample2, c("Npr3"), label = T) | VlnPlot(sample2, "Npr3", pt.size = 0)
+```
+
+Coronary vascular EC - Fabp4
+```{r}
+FeaturePlot(sample2, c("Fabp4"), label = T) | VlnPlot(sample2, "Fabp4", pt.size = 0)
+```
+
+Epicardial cell (Epi) - Wt1, TTbx18, Aldh1a2 - Not found
+```{r}
+FeaturePlot(sample2, c("Wt1", "Tbx18", "Aldh1a2"), label = T)
+```
+
+Fibroblast-like cells (Fb_like) - Postn
+```{r}
+FeaturePlot(sample2, c("Ddr2",  "Col3a1"), label = T)
+```
+
+Pericyte - Pdgfrb
+```{r}
+FeaturePlot(sample2, c("Pdgfrb"), label = T)
+```
+
+SMC - Myh11 
+```{r}
+FeaturePlot(sample2, c("Myh11"), label = T)
+```
+
+Immune cells (Immune) - C1qa 
+```{r}
+FeaturePlot(sample2, c("C1qa"), label = T)
+```
+
+Blood cells (RBC) - Hb1-a1 (not found)
+```{r}
+FeaturePlot(sample2, c("Hb1-a1"), label = T)
+```
+
+Immune cells (Macrophages, B-cells, T-cells, dendritics, NK-cells, neutrophils)
+Macrophages (Adgre1)
+```{r}
+FeaturePlot(sample2, c("Adgre1"), label = T)
+```
+
+B-cells (CD19)
+```{r}
+FeaturePlot(sample2, c("Cd19"), label = T)
+```
+
+T-cells (Bcl11b)
+```{r}
+FeaturePlot(sample2, c("Bcl11b"), label = T)
+```
+
+dendritic cells (H2-Oa) (not found)
+```{r}
+FeaturePlot(sample2, c("H2-Oa"), label = T)
+```
+
+natural killer cells (Unc13d) (not found)
+```{r}
+FeaturePlot(sample2, c("Unc13d"), label = T)
+```
+
+neutrophils (S100a9) (not found)
+```{r}
+FeaturePlot(sample2, c("S100a9"), label = T)
+```
+
+Proliferating cells
+```{r}
+FeaturePlot(sample2, c("Mki67"), label = T)
+```
+
+Rename cluster names and re-plot the dimplot
+```{r}
+current.cluster.ids <- c(0:18)
+new.cluster.ids <- c("Fibroblasts", "Vascular",  "Macrophages", "Vascular", "CMs", "CMs", "CMs",
+                     "Pericytes",  "Fibroblasts", "Vascular", "Endocardial",  "Macrophages", "ND1","B-cells", "SMCs", "Proliferating",  "T-cells", "Pericytes", "ND2")
+Idents(sample2) <- plyr::mapvalues(x = Idents(sample2), from = current.cluster.ids, to = new.cluster.ids)
+```
+
+Expression of AAV
+```{r}
+FeaturePlot(sample2,  "AAV", label = T)
+VlnPlot(sample2,  "AAV", pt.size = 0)
+```
+
+% of cells expressing this virus transgene
+```{r}
+sum(sample2@assays$RNA$data["AAV",] > 0) / length(Cells(sample2)) * 100
+```
+
+How many cardiomyocytes express this virus transgene
+```{r}
+cmyo_sample2 <- subset(x = sample2, idents = "CMs")
+sum(cmyo_sample2@assays$RNA$data["AAV",] > 0) / length(Cells(cmyo_sample2)) * 100
+```
+
