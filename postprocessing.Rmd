@@ -299,3 +299,24 @@ cmyo_sample2 <- subset(x = sample2, idents = "CMs")
 sum(cmyo_sample2@assays$RNA$data["AAV",] > 0) / length(Cells(cmyo_sample2)) * 100
 ```
 
+# Merging both objects
+Finding anchors
+```{r}
+features <- SelectIntegrationFeatures(object.list = list(sample1, sample2))
+samples.anchors <- FindIntegrationAnchors(object.list = list(sample1, sample2), anchor.features = features)
+samples.combined <- IntegrateData(anchorset = samples.anchors)
+```
+
+Processing the merged object
+```{r}
+# original unmodified data still resides in the 'RNA' assay
+DefaultAssay(samples.combined) <- "integrated"
+
+# Run the standard workflow for visualization and clustering
+samples.combined <- ScaleData(samples.combined, verbose = FALSE)
+samples.combined <- RunPCA(samples.combined, npcs = 30, verbose = FALSE)
+samples.combined <- RunUMAP(samples.combined, reduction = "pca", dims = 1:30)
+samples.combined <- FindNeighbors(samples.combined, reduction = "pca", dims = 1:30)
+samples.combined <- FindClusters(samples.combined, resolution = 0.5)
+```
+
