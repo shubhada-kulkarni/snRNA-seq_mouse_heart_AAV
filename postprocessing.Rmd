@@ -320,3 +320,47 @@ samples.combined <- FindNeighbors(samples.combined, reduction = "pca", dims = 1:
 samples.combined <- FindClusters(samples.combined, resolution = 0.5)
 ```
 
+# Statistics
+Expression analysis for AAV per sample
+```{r}
+# sample1
+for (i in seq(0,6)){
+  s <-  sum(sample1@assays$RNA$data["AAV",] > i)
+  all_aav <- sum(sample1@assays$RNA$data["AAV",] > 0)
+  print(paste(i,(s/all_aav)*100, (s/length(Cells(sample1)))*100))
+}
+
+# sample2
+for (i in seq(0,6)){
+  s <-  sum(sample2@assays$RNA$data["AAV",] > i)
+  all_aav <- sum(sample2@assays$RNA$data["AAV",] > 0)
+  print(paste(i,(s/all_aav)*100, (s/length(Cells(sample2)))*100))
+}
+
+# merged 
+for (i in seq(0,6)){
+  s <-  sum(samples.combined@assays$integrated@data["AAV",] > i)
+  all_aav <- sum(samples.combined@assays$integrated@data["AAV",] > 0)
+  print(paste(i,(s/all_aav)*100, (s/length(Cells(samples.combined)))*100))
+}
+```
+
+# Differential expression analysis induced versus non-induced
+Sample 2 is selected as this has highest induced population of cardiomyocytes
+
+First create a new ident for each cell-type based on AAV expression. 
+```{r}
+cmyo_sample2$aav <- cmyo_sample2@assays$RNA$data["AAV",rownames(cmyo_sample2@meta.data)]
+cmyo_sample2$flag <- ifelse(cmyo_sample2$aav > 0, "induced", "noninduced")
+```
+
+Replace idents of cmyo_sample2 with flag
+```{r}
+Idents(cmyo_sample2) <- cmyo_sample2$flag
+```
+
+Differential expression analysis of induced versus non-induced cells
+```{r}
+markers_induced <- FindAllMarkers(cmyo_sample2)
+write.csv(markers_induced, "markers_induced_sample2.csv", quote = F)
+```
